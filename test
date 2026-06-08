@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Test API COMREC</title>
+<style>
+  body { font-family: monospace; padding: 30px; background: #f0f4f8; }
+  button { padding: 10px 20px; margin: 8px 4px; cursor: pointer; font-size: 1rem; border: none; border-radius: 6px; }
+  .btn-get  { background: #2980a8; color: #fff; }
+  .btn-save { background: #27ae60; color: #fff; }
+  .btn-clear { background: #888; color: #fff; }
+  #log { background: #1a1a2e; color: #00ff88; padding: 20px; border-radius: 8px; min-height: 300px; margin-top: 20px; white-space: pre-wrap; font-size: 0.85rem; overflow-y: auto; max-height: 600px; }
+  .err { color: #ff6b6b; }
+  .ok  { color: #00ff88; }
+  .inf { color: #ffd93d; }
+</style>
+</head>
+<body>
+
+<h2>🧪 Test API COMREC</h2>
+<p><b>URL:</b> <code id="api-url"></code></p>
+
+<button class="btn-get"  onclick="testGet()">1. TEST GET — Cargar materiales</button>
+<button class="btn-save" onclick="testSaveGet()">2. TEST SAVE por GET</button>
+<button class="btn-save" onclick="testSaveIframe()">3. TEST SAVE por IFRAME</button>
+<button class="btn-clear" onclick="document.getElementById('log').innerHTML=''">Limpiar</button>
+
+<div id="log">Esperando prueba...\n</div>
+
+<iframe name="test_iframe" style="display:none"></iframe>
+<form id="test-form" method="POST" target="test_iframe" style="display:none">
+  <input type="hidden" id="form-payload" name="payload">
+</form>
+
+<script>
+const API_URL = 'https://script.google.com/macros/s/AKfycbz3mJmzBnuBBwbyHjy__bUOZLQTi-mTRsk7wHnliUYc6m6Ka6O3RkY-jgxkdm2n9CkKag/exec';
+document.getElementById('api-url').textContent = API_URL;
+
+const PAYLOAD_PRUEBA = {
+  accion: 'saveInventario',
+  mes: 1,
+  anyo: 2099,
+  patio: 'Patio 1y2',
+  materiales: [
+    { material: '1.03 CARTONCILLO GRIS', balas: 10.5, suelto: 2.3, reembalar: 1.1, observaciones: 'TEST' },
+    { material: '1.04 CARTON',           balas: 5.0,  suelto: 0,   reembalar: 0,   observaciones: '' }
+  ]
+};
+
+function log(msg, tipo = '') {
+  const el = document.getElementById('log');
+  const cls = tipo === 'err' ? 'err' : tipo === 'ok' ? 'ok' : 'inf';
+  el.innerHTML += `<span class="${cls}">[${new Date().toLocaleTimeString()}] ${msg}</span>\n`;
+  el.scrollTop = el.scrollHeight;
+}
+
+// ── TEST 1: GET simple ─────────────────────────────────
+async function testGet() {
+  log('--- TEST GET: getMateriales ---', 'inf');
+  try {
+    const url = `${API_URL}?accion=getMateriales`;
+    log('Fetching: ' + url.substring(0, 80) + '...');
+    const r = await fetch(url, { redirect: 'follow' });
+    log('HTTP status: ' + r.status);
+    const text = await r.text();
+    log('Respuesta raw: ' + text.substring(0, 200));
+    const json = JSON.parse(text);
+    if (json.ok) {
+      log(`OK - ${json.materiales.length} materiales cargados`, 'ok');
+    } else {
+      log('Error: ' + json.error, 'err');
+    }
+  } catch(e) {
+    log('EXCEPCION: ' + e.message, 'err');
+  }
+}
+
+// ── TEST 2: SAVE por GET (URL params) ─────────────────
+async function testSaveGet() {
+  log('--- TEST SAVE por GET ---', 'inf');
+  try {
+    const data = encodeURIComponent(JSON.stringify({
+      mes: PAYLOAD_PRUEBA.mes,
+      anyo: PAYLOAD_PRUEBA.anyo,
+      patio: PAYLOAD_PRUEBA.patio,
+      materiales: PAYLOAD_PRUEBA.materiales
+    }));
+    const url = `${API_URL}?accion=saveInventario&data=${data}`;
+    log('URL length: ' + url.length + ' chars');
+    if (url.length > 2000) log('AVISO: URL muy larga (>2000 chars), puede fallar', 'err');
+    const r = await fetch(url, { redirect: 'follow' });
+    log('HTTP status: ' + r.status);
+    const text = await r.text();
+    log('Respuesta: ' + text.substring(0, 300));
+    const json = JSON.parse(text);
+    log(json.ok ? 'GUARDADO OK - filas: ' + json.guardadas : 'ERROR: ' + json.error, json.ok ? 'ok' : 'err');
+  } catch(e) {
+    log('EXCEPCION: ' + e.message, 'err');
+  }
+}
+
+// ── TEST 3: SAVE por IFRAME POST ──────────────────────
+function testSaveIframe() {
+  log('--- TEST SAVE por IFRAME POST ---', 'inf');
+
+  const iframe = document.createElement('iframe');
+  iframe.name = 'iframe_test_' + Date.now();
+  iframe.style.display = 'none';
+  document.body.appendChild(iframe);
+
+  const form = document.createElement('form');
+  form.method = 'POST';
+  form.action = API_URL;
+  form.target = iframe.name;
+  form.style.display = 'none';
+
+  const input = document.createElement('input');
+  input.type = 'hidden';
+  input.name = 'payload';
+  input.value = JSON.stringify(PAYLOAD_PRUEBA);
+  form.appendChild(input);
+  document.body.appendChild(form);
+
+  log('Payload size: ' + input.value.length + ' chars');
+  log('Enviando formulario por POST a iframe...');
+
+  const timer = setTimeout(() => {
+    log('TIMEOUT: no hubo respuesta en 15s', 'err');
+    log('(El iframe POST puede no devolver respuesta por CORS, pero el dato puede haberse guardado)', 'inf');
+    log('Verifica en Google Sheets si aparecio la fila de prueba (mes=1, anio=2099)', 'inf');
+  }, 15000);
+
+  iframe.onload = () => {
+    clearTimeout(timer);
+    log('iframe.onload disparado - el POST llego al servidor', 'ok');
+    log('Verifica en Google Sheets si aparecio la fila (mes=1, anio=2099)', 'ok');
+    try {
+      const body = iframe.contentDocument.body.innerText;
+      log('Respuesta iframe: ' + body.substring(0, 200), 'ok');
+    } catch(e) {
+      log('No se puede leer respuesta del iframe (CORS) - normal', 'inf');
+    }
+    setTimeout(() => {
+      document.body.removeChild(iframe);
+      document.body.removeChild(form);
+    }, 1000);
+  };
+
+  form.submit();
+  log('Formulario enviado, esperando respuesta...');
+}
+</script>
+</body>
+</html>
