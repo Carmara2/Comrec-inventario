@@ -257,12 +257,17 @@ body { font-family: var(--font-main); background: #dce8ee; color: var(--texto); 
   color: var(--texto);
   width: 100%;
 }
-#card-material[size="25"] {
-  position: absolute;
-  z-index: 1000;
-  width: 340px;
-  box-shadow: 0 4px 20px rgba(0,0,0,0.15);
-  border-color: var(--azul-claro);
+#card-material {
+  height: auto;
+  border-color: #d4b84a;
+  cursor: pointer;
+}
+#card-material option {
+  padding: 5px 8px;
+}
+#card-material option:checked {
+  background: var(--azul-medio);
+  color: #fff;
 }
 .card-fields select:focus,
 .card-fields input:focus { outline: none; border-color: var(--azul-claro); }
@@ -534,7 +539,7 @@ body { font-family: var(--font-main); background: #dce8ee; color: var(--texto); 
         <div class="card-fields">
           <div class="field material-sel">
             <label>Mercancía</label>
-            <select id="card-material" onmousedown="this.size=25;" onblur="this.size=1;" onchange="this.size=1; this.blur();">
+            <select id="card-material">
               <option value="">— Selecciona material —</option>
             </select>
           </div>
@@ -651,7 +656,7 @@ body { font-family: var(--font-main); background: #dce8ee; color: var(--texto); 
             style="width:100%;padding:7px 12px;border:1.5px solid var(--borde);border-radius:6px;font-family:inherit;font-size:0.86rem;"
             oninput="filtrarMateriales()">
         </div>
-        <div id="mat-lista" style="max-height:520px;overflow-y:auto;">
+        <div id="mat-lista" style="min-height:1025px;overflow-y:auto;">
           <div class="text-muted" style="padding:20px;text-align:center;">Cargando materiales...</div>
         </div>
       </div>
