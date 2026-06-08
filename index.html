@@ -257,6 +257,13 @@ body { font-family: var(--font-main); background: #dce8ee; color: var(--texto); 
   color: var(--texto);
   width: 100%;
 }
+#card-material[size="25"] {
+  position: absolute;
+  z-index: 1000;
+  width: 340px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+  border-color: var(--azul-claro);
+}
 .card-fields select:focus,
 .card-fields input:focus { outline: none; border-color: var(--azul-claro); }
 .card-actions { margin-top: 12px; display: flex; gap: 8px; }
@@ -527,7 +534,7 @@ body { font-family: var(--font-main); background: #dce8ee; color: var(--texto); 
         <div class="card-fields">
           <div class="field material-sel">
             <label>Mercancía</label>
-            <select id="card-material">
+            <select id="card-material" onmousedown="this.size=25;" onblur="this.size=1;" onchange="this.size=1; this.blur();">
               <option value="">— Selecciona material —</option>
             </select>
           </div>
@@ -1304,4 +1311,3 @@ async function toggleMaterial(idx) {
 </script>
 </body>
 </html>
-
