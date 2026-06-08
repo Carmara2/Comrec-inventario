@@ -1,0 +1,1276 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>COMREC — Inventario Mensual</title>
+
+<!-- SheetJS para exportar Excel -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+<style>
+/* ── Variables ─────────────────────────────────────── */
+:root {
+  --azul-oscuro:   #0d3d52;
+  --azul-medio:    #1a5f7a;
+  --azul-claro:    #2980a8;
+  --verde-claro:   #e8f5e3;
+  --verde-tab:     #c8e6c0;
+  --amarillo:      #fff8e1;
+  --amarillo-borde:#f5c842;
+  --gris-tabla:    #f0f4f8;
+  --blanco:        #ffffff;
+  --texto:         #1a2e3a;
+  --texto-suave:   #5a7a8a;
+  --borde:         #cddde8;
+  --rojo:          #c0392b;
+  --verde-btn:     #27ae60;
+  --sombra:        0 2px 12px rgba(13,61,82,0.12);
+  --sidebar-w:     220px;
+  --font-main:     'Segoe UI', system-ui, sans-serif;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: var(--font-main); background: #dce8ee; color: var(--texto); min-height: 100vh; display: flex; }
+
+/* ── Sidebar ───────────────────────────────────────── */
+#sidebar {
+  width: var(--sidebar-w);
+  background: var(--azul-oscuro);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  position: fixed;
+  left: 0; top: 0;
+  z-index: 100;
+  box-shadow: 3px 0 15px rgba(0,0,0,0.25);
+}
+#sidebar .logo {
+  padding: 24px 16px 20px;
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+}
+#sidebar .logo h1 {
+  color: #fff;
+  font-size: 1.3rem;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+#sidebar .logo p {
+  color: rgba(255,255,255,0.5);
+  font-size: 0.72rem;
+  margin-top: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.sidebar-nav { padding: 16px 0; flex: 1; }
+.nav-label {
+  color: rgba(255,255,255,0.35);
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  padding: 8px 20px 4px;
+}
+.nav-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 11px 20px;
+  color: rgba(255,255,255,0.7);
+  cursor: pointer;
+  transition: all 0.18s;
+  font-size: 0.88rem;
+  border-left: 3px solid transparent;
+}
+.nav-item:hover { background: rgba(255,255,255,0.07); color: #fff; }
+.nav-item.active { background: rgba(255,255,255,0.12); color: #fff; border-left-color: #4db8e8; font-weight: 600; }
+.nav-item svg { opacity: 0.7; flex-shrink: 0; }
+.nav-item.active svg { opacity: 1; }
+
+/* ── Main ──────────────────────────────────────────── */
+#main {
+  margin-left: var(--sidebar-w);
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+/* ── Header ────────────────────────────────────────── */
+#header {
+  background: var(--blanco);
+  padding: 0 28px;
+  height: 60px;
+  display: flex; align-items: center; justify-content: space-between;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  position: sticky; top: 0; z-index: 50;
+}
+#header h2 { font-size: 1rem; font-weight: 600; color: var(--azul-oscuro); }
+#header .header-right { display: flex; gap: 10px; align-items: center; }
+
+/* ── Botones generales ─────────────────────────────── */
+.btn {
+  padding: 8px 18px;
+  border-radius: 6px;
+  border: none;
+  cursor: pointer;
+  font-size: 0.82rem;
+  font-weight: 600;
+  font-family: inherit;
+  transition: all 0.18s;
+  display: inline-flex; align-items: center; gap: 7px;
+  letter-spacing: 0.3px;
+}
+.btn-primary { background: var(--azul-medio); color: #fff; }
+.btn-primary:hover { background: var(--azul-claro); }
+.btn-success { background: var(--verde-btn); color: #fff; }
+.btn-success:hover { background: #219a52; }
+.btn-danger  { background: var(--rojo); color: #fff; }
+.btn-danger:hover { background: #a93226; }
+.btn-excel   { background: #1d6f42; color: #fff; }
+.btn-excel:hover { background: #155a34; }
+.btn-outline { background: transparent; border: 1.5px solid var(--azul-medio); color: var(--azul-medio); }
+.btn-outline:hover { background: var(--azul-medio); color: #fff; }
+.btn-sm { padding: 5px 12px; font-size: 0.78rem; }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* ── Secciones ─────────────────────────────────────── */
+.section { display: none; padding: 24px 28px; flex: 1; }
+.section.active { display: block; }
+
+/* ── Selector mes/año ──────────────────────────────── */
+.mes-bar {
+  background: var(--blanco);
+  border-radius: 10px;
+  padding: 14px 20px;
+  display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+  box-shadow: var(--sombra);
+  margin-bottom: 20px;
+}
+.mes-bar label { font-size: 0.8rem; font-weight: 600; color: var(--texto-suave); text-transform: uppercase; letter-spacing: 0.5px; }
+.mes-bar select, .mes-bar input {
+  padding: 7px 12px;
+  border: 1.5px solid var(--borde);
+  border-radius: 6px;
+  font-family: inherit;
+  font-size: 0.88rem;
+  color: var(--texto);
+  background: #f8fbfd;
+  transition: border-color 0.15s;
+}
+.mes-bar select:focus, .mes-bar input:focus { outline: none; border-color: var(--azul-claro); }
+.mes-bar .spacer { flex: 1; }
+
+/* ── Pestañas de patios ────────────────────────────── */
+.tabs-wrap {
+  display: flex; gap: 4px;
+  margin-bottom: 0;
+  overflow-x: auto;
+}
+.tab-btn {
+  padding: 10px 20px;
+  border-radius: 8px 8px 0 0;
+  border: 1.5px solid var(--borde);
+  border-bottom: none;
+  background: #d4e8d4;
+  cursor: pointer;
+  font-size: 0.84rem;
+  font-weight: 600;
+  color: var(--azul-oscuro);
+  transition: all 0.15s;
+  white-space: nowrap;
+  font-family: inherit;
+}
+.tab-btn:hover { background: var(--verde-tab); }
+.tab-btn.active { background: var(--verde-claro); border-color: var(--azul-medio); color: var(--azul-medio); position: relative; z-index: 2; }
+
+/* ── Panel del patio ───────────────────────────────── */
+.patio-panel {
+  background: var(--verde-claro);
+  border: 1.5px solid var(--azul-medio);
+  border-radius: 0 8px 8px 8px;
+  padding: 20px;
+  box-shadow: var(--sombra);
+}
+
+/* ── Tarjeta material ──────────────────────────────── */
+.material-card {
+  background: var(--amarillo);
+  border: 1.5px solid var(--amarillo-borde);
+  border-radius: 10px;
+  padding: 16px 20px;
+  margin-bottom: 16px;
+}
+.material-card .card-title {
+  font-size: 0.72rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.7px; color: var(--texto-suave); margin-bottom: 12px;
+}
+.card-fields {
+  display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end;
+}
+.card-fields .field { display: flex; flex-direction: column; gap: 4px; }
+.card-fields .field.material-sel { flex: 2; min-width: 200px; }
+.card-fields .field.peso-field { flex: 1; min-width: 110px; }
+.card-fields .field.obs-field { flex: 2; min-width: 180px; }
+.card-fields label { font-size: 0.73rem; font-weight: 600; color: var(--texto-suave); text-transform: uppercase; letter-spacing: 0.4px; }
+.card-fields select,
+.card-fields input[type=text],
+.card-fields input[type=number] {
+  padding: 7px 10px;
+  border: 1.5px solid #d4b84a;
+  border-radius: 6px;
+  font-family: inherit;
+  font-size: 0.86rem;
+  background: var(--blanco);
+  color: var(--texto);
+  width: 100%;
+}
+.card-fields select:focus,
+.card-fields input:focus { outline: none; border-color: var(--azul-claro); }
+.card-actions { margin-top: 12px; display: flex; gap: 8px; }
+
+/* ── Tabla inferior ────────────────────────────────── */
+.tabla-wrap {
+  background: var(--azul-oscuro);
+  border-radius: 10px;
+  padding: 16px;
+}
+.tabla-titulo {
+  color: rgba(255,255,255,0.7);
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.7px;
+  margin-bottom: 12px;
+}
+.tabla-inv {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--blanco);
+  border-radius: 8px;
+  overflow: hidden;
+  font-size: 0.83rem;
+}
+.tabla-inv thead th {
+  background: var(--azul-medio);
+  color: #fff;
+  padding: 10px 12px;
+  text-align: left;
+  font-weight: 600;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  border: none;
+}
+.tabla-inv tbody tr {
+  border-bottom: 1px solid var(--borde);
+  cursor: pointer;
+  transition: background 0.13s;
+}
+.tabla-inv tbody tr:hover { background: #e8f4ff; }
+.tabla-inv tbody tr.seleccionada { background: #d0eaff; font-weight: 600; }
+.tabla-inv tbody td { padding: 9px 12px; color: var(--texto); }
+.tabla-inv tbody td.num { text-align: right; font-variant-numeric: tabular-nums; }
+.tabla-inv .vacio { color: var(--texto-suave); font-style: italic; text-align: center; padding: 20px; }
+.tabla-inv tfoot td {
+  padding: 9px 12px;
+  font-weight: 700;
+  background: #e8f0f5;
+  border-top: 2px solid var(--azul-medio);
+  font-size: 0.83rem;
+}
+.tabla-inv tfoot td.num { text-align: right; }
+
+/* ── Footer del patio ──────────────────────────────── */
+.patio-footer {
+  margin-top: 16px;
+  display: flex; justify-content: center; gap: 12px;
+}
+
+/* ── Sección histórico ─────────────────────────────── */
+.historico-grid {
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  gap: 20px;
+  align-items: start;
+}
+.historico-lista {
+  background: var(--blanco);
+  border-radius: 10px;
+  box-shadow: var(--sombra);
+  overflow: hidden;
+}
+.historico-lista h3 {
+  padding: 14px 18px;
+  background: var(--azul-medio);
+  color: #fff;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.mes-item {
+  padding: 12px 18px;
+  cursor: pointer;
+  border-bottom: 1px solid var(--borde);
+  transition: background 0.13s;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.mes-item:hover { background: #f0f7ff; }
+.mes-item.active { background: #ddeeff; font-weight: 600; }
+.mes-item .mes-nombre { font-size: 0.88rem; }
+.badge-bloq {
+  background: var(--rojo);
+  color: #fff;
+  font-size: 0.65rem;
+  padding: 2px 7px;
+  border-radius: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+.badge-open {
+  background: var(--verde-btn);
+  color: #fff;
+  font-size: 0.65rem;
+  padding: 2px 7px;
+  border-radius: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+.historico-detalle {
+  background: var(--blanco);
+  border-radius: 10px;
+  box-shadow: var(--sombra);
+  padding: 20px;
+}
+.historico-detalle h3 {
+  font-size: 1rem; font-weight: 700; color: var(--azul-oscuro);
+  margin-bottom: 16px; padding-bottom: 10px;
+  border-bottom: 2px solid var(--borde);
+}
+
+/* ── Toast ─────────────────────────────────────────── */
+#toast {
+  position: fixed; bottom: 28px; right: 28px;
+  background: var(--azul-oscuro);
+  color: #fff;
+  padding: 13px 22px;
+  border-radius: 8px;
+  font-size: 0.88rem;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.25);
+  transform: translateY(80px); opacity: 0;
+  transition: all 0.3s ease;
+  z-index: 9999;
+  max-width: 380px;
+}
+#toast.show { transform: translateY(0); opacity: 1; }
+#toast.error { background: var(--rojo); }
+#toast.success { background: var(--verde-btn); }
+
+/* ── Spinner ───────────────────────────────────────── */
+.spinner {
+  display: inline-block; width: 16px; height: 16px;
+  border: 2px solid rgba(255,255,255,0.4);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── Loading overlay ───────────────────────────────── */
+#loading {
+  position: fixed; inset: 0;
+  background: rgba(13,61,82,0.55);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 9000;
+  display: none;
+}
+#loading .loader-box {
+  background: #fff; border-radius: 12px;
+  padding: 28px 40px; text-align: center;
+}
+#loading .loader-box p { margin-top: 12px; font-size: 0.88rem; color: var(--texto-suave); }
+
+/* ── Utilidades ─────────────────────────────────────── */
+.text-muted { color: var(--texto-suave); font-size: 0.82rem; }
+.mt-12 { margin-top: 12px; }
+
+/* ── Lista materiales ───────────────────────────────── */
+.mat-item {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--borde);
+  font-size: 0.84rem;
+  transition: background 0.12s;
+}
+.mat-item:hover { background: #f5f9fc; }
+.mat-item .mat-nombre { flex: 1; font-weight: 500; }
+.mat-item .mat-nombre.inactivo { color: var(--texto-suave); text-decoration: line-through; }
+.mat-toggle {
+  padding: 4px 10px; border-radius: 5px; border: none;
+  font-size: 0.72rem; font-weight: 700; cursor: pointer;
+  font-family: inherit; transition: all 0.15s; letter-spacing: 0.3px;
+}
+.mat-toggle.activo { background: #fde8e8; color: var(--rojo); }
+.mat-toggle.activo:hover { background: var(--rojo); color: #fff; }
+.mat-toggle.inactivo { background: #e8f5e8; color: var(--verde-btn); }
+.mat-toggle.inactivo:hover { background: var(--verde-btn); color: #fff; }
+</style>
+</head>
+<body>
+
+<!-- ══ SIDEBAR ══════════════════════════════════════════ -->
+<nav id="sidebar">
+  <div class="logo">
+    <h1>COMREC</h1>
+    <p>Inventario de Almacén</p>
+  </div>
+  <div class="sidebar-nav">
+    <div class="nav-label">Inventario</div>
+    <div class="nav-item active" data-section="registro" onclick="cambiarSeccion('registro')">
+      <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+      Registro Mensual
+    </div>
+    <div class="nav-item" data-section="historico" onclick="cambiarSeccion('historico')">
+      <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+      Histórico
+    </div>
+    <div class="nav-item" data-section="materiales" onclick="cambiarSeccion('materiales')">
+      <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M20 7H4a2 2 0 00-2 2v6a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2z"/><path d="M16 21V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v16"/></svg>
+      Materiales
+    </div>
+    <div class="nav-label" style="margin-top:16px">Configuración</div>
+    <div class="nav-item" onclick="abrirConfig()">
+      <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 010 14.14M4.93 4.93a10 10 0 000 14.14"/></svg>
+      Configurar API
+    </div>
+  </div>
+</nav>
+
+<!-- ══ MAIN ═════════════════════════════════════════════ -->
+<div id="main">
+
+  <!-- Header -->
+  <div id="header">
+    <h2 id="header-titulo">Registro Mensual</h2>
+    <div class="header-right">
+      <button class="btn btn-excel" onclick="exportarExcel()">
+        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+        Exportar a Excel
+      </button>
+    </div>
+  </div>
+
+  <!-- ══ SECCIÓN: REGISTRO ═══════════════════════════ -->
+  <div id="sec-registro" class="section active">
+
+    <!-- Barra mes/año -->
+    <div class="mes-bar">
+      <label>Mes</label>
+      <select id="sel-mes" onchange="onCambioMes()">
+        <option value="">— Selecciona —</option>
+        <option value="1">Enero</option><option value="2">Febrero</option>
+        <option value="3">Marzo</option><option value="4">Abril</option>
+        <option value="5">Mayo</option><option value="6">Junio</option>
+        <option value="7">Julio</option><option value="8">Agosto</option>
+        <option value="9">Septiembre</option><option value="10">Octubre</option>
+        <option value="11">Noviembre</option><option value="12">Diciembre</option>
+      </select>
+      <label>Año</label>
+      <input id="inp-anyo" type="number" min="2020" max="2099" style="width:90px" onchange="onCambioMes()">
+      <div class="spacer"></div>
+      <button class="btn btn-danger btn-sm" onclick="bloquearMes()">
+        <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+        Inmobilizar mes
+      </button>
+    </div>
+
+    <!-- Alerta mes bloqueado -->
+    <div id="alerta-bloq" style="display:none; background:#fde8e8; border:1.5px solid var(--rojo); border-radius:8px; padding:12px 18px; margin-bottom:16px; color:var(--rojo); font-size:0.86rem; font-weight:600;">
+      ⚠️ Este mes está bloqueado. No se pueden realizar cambios.
+    </div>
+
+    <!-- Tabs patios -->
+    <div class="tabs-wrap" id="tabs-patios"></div>
+
+    <!-- Panel patio -->
+    <div class="patio-panel">
+      <!-- Tarjeta entrada material -->
+      <div class="material-card">
+        <div class="card-title">Material</div>
+        <div class="card-fields">
+          <div class="field material-sel">
+            <label>Mercancía</label>
+            <select id="card-material">
+              <option value="">— Selecciona material —</option>
+            </select>
+          </div>
+          <div class="field peso-field">
+            <label>Balas acabadas (Tn)</label>
+            <input id="card-balas" type="number" step="0.001" min="0" placeholder="0,000">
+          </div>
+          <div class="field peso-field">
+            <label>Suelto (Tn)</label>
+            <input id="card-suelto" type="number" step="0.001" min="0" placeholder="0,000">
+          </div>
+          <div class="field peso-field">
+            <label>Mat. reembalar (Tn)</label>
+            <input id="card-reembalar" type="number" step="0.001" min="0" placeholder="0,000">
+          </div>
+          <div class="field obs-field">
+            <label>Observaciones</label>
+            <input id="card-obs" type="text" placeholder="Proveedor, notas...">
+          </div>
+        </div>
+        <div class="card-actions">
+          <button class="btn btn-primary btn-sm" onclick="registrarMaterial()">
+            <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            Registrar material
+          </button>
+          <button class="btn btn-outline btn-sm" onclick="limpiarCard()">Limpiar</button>
+        </div>
+      </div>
+
+      <!-- Tabla inventario -->
+      <div class="tabla-wrap">
+        <div class="tabla-titulo">Listado de materiales en este patio</div>
+        <table class="tabla-inv" id="tabla-materiales">
+          <thead>
+            <tr>
+              <th style="width:40%">Material</th>
+              <th style="width:15%">Balas acabadas</th>
+              <th style="width:15%">Pendiente embalar</th>
+              <th>Observaciones</th>
+            </tr>
+          </thead>
+          <tbody id="tabla-body">
+            <tr><td colspan="4" class="vacio">Selecciona mes y año para cargar el inventario</td></tr>
+          </tbody>
+          <tfoot id="tabla-foot" style="display:none">
+            <tr>
+              <td>TOTAL</td>
+              <td class="num" id="tot-balas">—</td>
+              <td class="num" id="tot-pend">—</td>
+              <td></td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+
+      <!-- Footer patio -->
+      <div class="patio-footer">
+        <button class="btn btn-success" onclick="guardarPatio()" id="btn-guardar">
+          <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+          Registrar patio en inventario
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ SECCIÓN: HISTÓRICO ══════════════════════════ -->
+  <div id="sec-historico" class="section">
+    <div class="historico-grid">
+      <div class="historico-lista">
+        <h3>Meses registrados</h3>
+        <div id="lista-meses">
+          <div class="mes-item text-muted" style="cursor:default">Cargando...</div>
+        </div>
+      </div>
+      <div class="historico-detalle" id="historico-detalle">
+        <h3>Selecciona un mes para ver el inventario</h3>
+        <p class="text-muted">Haz clic en cualquier mes de la lista para visualizar los datos guardados.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ SECCIÓN: MATERIALES ════════════════════════════ -->
+  <div id="sec-materiales" class="section">
+    <div style="display:grid;grid-template-columns:380px 1fr;gap:20px;align-items:start;">
+
+      <!-- Formulario alta -->
+      <div style="background:var(--blanco);border-radius:10px;box-shadow:var(--sombra);overflow:hidden;">
+        <div style="padding:14px 18px;background:var(--azul-medio);color:#fff;font-size:0.85rem;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;">
+          Dar de alta material
+        </div>
+        <div style="padding:20px;display:flex;flex-direction:column;gap:14px;">
+          <div>
+            <label style="font-size:0.75rem;font-weight:600;color:var(--texto-suave);text-transform:uppercase;letter-spacing:0.4px;display:block;margin-bottom:5px;">Nombre del material</label>
+            <input id="mat-nuevo-nombre" type="text" placeholder="Ej: PAPEL KRAFT NUEVO"
+              style="width:100%;padding:9px 12px;border:1.5px solid var(--borde);border-radius:6px;font-family:inherit;font-size:0.88rem;text-transform:uppercase;"
+              oninput="this.value=this.value.toUpperCase()">
+            <p id="mat-nuevo-aviso" style="display:none;margin-top:5px;font-size:0.75rem;color:var(--rojo);font-weight:600;">⚠️ Este material ya existe en la lista.</p>
+          </div>
+          <button class="btn btn-success" onclick="altaMaterial()" style="width:100%;justify-content:center;">
+            <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            Dar de alta
+          </button>
+        </div>
+      </div>
+
+      <!-- Lista de materiales -->
+      <div style="background:var(--blanco);border-radius:10px;box-shadow:var(--sombra);overflow:hidden;">
+        <div style="padding:14px 18px;background:var(--azul-medio);color:#fff;display:flex;align-items:center;justify-content:space-between;">
+          <span style="font-size:0.85rem;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;">Lista de materiales</span>
+          <span id="mat-contador" style="font-size:0.78rem;opacity:0.75;"></span>
+        </div>
+        <div style="padding:12px 16px;border-bottom:1px solid var(--borde);">
+          <input id="mat-buscar" type="text" placeholder="Buscar material..."
+            style="width:100%;padding:7px 12px;border:1.5px solid var(--borde);border-radius:6px;font-family:inherit;font-size:0.86rem;"
+            oninput="filtrarMateriales()">
+        </div>
+        <div id="mat-lista" style="max-height:520px;overflow-y:auto;">
+          <div class="text-muted" style="padding:20px;text-align:center;">Cargando materiales...</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+</div><!-- /main -->
+
+<!-- ══ LOADING ══════════════════════════════════════════ -->
+<div id="loading">
+  <div class="loader-box">
+    <div class="spinner" style="width:32px;height:32px;border-width:3px;border-color:rgba(13,61,82,0.2);border-top-color:var(--azul-medio);display:inline-block;"></div>
+    <p id="loading-msg">Guardando...</p>
+  </div>
+</div>
+
+<!-- ══ TOAST ════════════════════════════════════════════ -->
+<div id="toast"></div>
+
+<!-- ══ MODAL CONFIG ══════════════════════════════════════ -->
+<div id="modal-config" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:9999;align-items:center;justify-content:center;">
+  <div style="background:#fff;border-radius:12px;padding:28px 32px;width:520px;max-width:95vw;box-shadow:0 8px 40px rgba(0,0,0,0.2);">
+    <h3 style="margin-bottom:16px;font-size:1rem;color:var(--azul-oscuro)">Configuración de API</h3>
+    <label style="font-size:0.8rem;font-weight:600;color:var(--texto-suave);display:block;margin-bottom:6px">URL del Apps Script desplegado</label>
+    <input id="inp-api-url" type="text" style="width:100%;padding:9px 12px;border:1.5px solid var(--borde);border-radius:6px;font-size:0.86rem;font-family:inherit;" placeholder="https://script.google.com/macros/s/...">
+    <p style="font-size:0.75rem;color:var(--texto-suave);margin-top:8px">Esta URL se guarda en el navegador (localStorage).</p>
+    <div style="display:flex;gap:10px;margin-top:20px;justify-content:flex-end;">
+      <button class="btn btn-outline btn-sm" onclick="cerrarConfig()">Cancelar</button>
+      <button class="btn btn-primary btn-sm" onclick="guardarConfig()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════
+// CONFIGURACIÓN
+// ═══════════════════════════════════════════════════════
+let API_URL = localStorage.getItem('comrec_api_url') || '';
+
+const PATIOS = ['Patio 1y2', 'Patio 3', 'Patio 6', 'Patio Central', 'Gruscal y Campa'];
+const MESES_NOMBRES = ['', 'Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+
+// ─── Estado ───────────────────────────────────────────
+let patioActivo = 0;                    // índice en PATIOS
+let inventarioPatio = {};               // { 'Patio 1y2': [{material,balas,suelto,reembalar,obs},...], ... }
+let materialesMaestros = [];            // lista maestra
+let recientesPorPatio = {};            // materiales últimos 6 meses por patio
+let mesSeleccionado = null;
+let anyoSeleccionado = null;
+let mesBloqueado = false;
+let filaEditandoIdx = null;
+
+// ═══════════════════════════════════════════════════════
+// INICIO
+// ═══════════════════════════════════════════════════════
+window.addEventListener('DOMContentLoaded', () => {
+  // Año actual por defecto
+  const hoy = new Date();
+  document.getElementById('inp-anyo').value = hoy.getFullYear();
+  document.getElementById('sel-mes').value = hoy.getMonth() + 1;
+
+  // Crear tabs
+  const tabsWrap = document.getElementById('tabs-patios');
+  PATIOS.forEach((p, i) => {
+    const btn = document.createElement('button');
+    btn.className = 'tab-btn' + (i === 0 ? ' active' : '');
+    btn.textContent = p;
+    btn.onclick = () => cambiarPatio(i);
+    tabsWrap.appendChild(btn);
+  });
+
+  if (!API_URL) {
+    toast('Configura la URL del Apps Script en el menú lateral', 'error', 5000);
+  } else {
+    cargarMateriales();
+  }
+});
+
+// ═══════════════════════════════════════════════════════
+// NAVEGACIÓN
+// ═══════════════════════════════════════════════════════
+function cambiarSeccion(sec) {
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('sec-' + sec).classList.add('active');
+  document.querySelector(`[data-section="${sec}"]`).classList.add('active');
+  const titulos = { registro: 'Registro Mensual', historico: 'Histórico de Inventarios', materiales: 'Gestión de Materiales' };
+  document.getElementById('header-titulo').textContent = titulos[sec] || sec;
+
+  if (sec === 'historico') cargarHistorico();
+  if (sec === 'materiales') cargarSeccionMateriales();
+}
+
+function cambiarPatio(idx) {
+  patioActivo = idx;
+  document.querySelectorAll('.tab-btn').forEach((b, i) => b.classList.toggle('active', i === idx));
+  limpiarCard();
+  filaEditandoIdx = null;
+  renderTabla();
+}
+
+// ═══════════════════════════════════════════════════════
+// API CALLS
+// ═══════════════════════════════════════════════════════
+async function apiGet(params) {
+  if (!API_URL) { toast('Configura la URL del Apps Script primero', 'error'); return null; }
+  const qs = new URLSearchParams(params).toString();
+  const r = await fetch(`${API_URL}?${qs}`);
+  return r.json();
+}
+
+async function apiPost(body) {
+  if (!API_URL) { toast('Configura la URL del Apps Script primero', 'error'); return null; }
+  const r = await fetch(API_URL, {
+    method: 'POST',
+    body: JSON.stringify(body),
+    headers: { 'Content-Type': 'application/json' }
+  });
+  return r.json();
+}
+
+// ═══════════════════════════════════════════════════════
+// CARGAR MATERIALES MAESTROS
+// ═══════════════════════════════════════════════════════
+async function cargarMateriales() {
+  const data = await apiGet({ accion: 'getMateriales' });
+  if (data && data.ok) {
+    materialesMaestros = data.materiales;
+    poblarSelectMaterial(materialesMaestros);
+  }
+}
+
+function poblarSelectMaterial(lista) {
+  const sel = document.getElementById('card-material');
+  sel.innerHTML = '<option value="">— Selecciona material —</option>';
+  lista.forEach(m => {
+    const o = document.createElement('option');
+    o.value = m; o.textContent = m;
+    sel.appendChild(o);
+  });
+}
+
+// ═══════════════════════════════════════════════════════
+// CAMBIO MES/AÑO
+// ═══════════════════════════════════════════════════════
+async function onCambioMes() {
+  const mes = parseInt(document.getElementById('sel-mes').value);
+  const anyo = parseInt(document.getElementById('inp-anyo').value);
+  if (!mes || !anyo || anyo < 2020) return;
+
+  mesSeleccionado = mes;
+  anyoSeleccionado = anyo;
+
+  // Inicializar inventario vacío para todos los patios
+  PATIOS.forEach(p => { if (!inventarioPatio[p]) inventarioPatio[p] = []; });
+
+  mostrarLoading('Cargando inventario...');
+  const data = await apiGet({ accion: 'getInventario', mes, anyo });
+  ocultarLoading();
+
+  if (!data || !data.ok) { toast('Error al cargar inventario', 'error'); return; }
+
+  // Verificar si está bloqueado
+  const bData = await apiGet({ accion: 'getBloqueados' });
+  mesBloqueado = bData && bData.ok &&
+    bData.bloqueados.some(b => parseInt(b.mes) === mes && parseInt(b.anyo) === anyo);
+  document.getElementById('alerta-bloq').style.display = mesBloqueado ? 'block' : 'none';
+  document.getElementById('btn-guardar').disabled = mesBloqueado;
+
+  // Cargar datos existentes
+  PATIOS.forEach(p => inventarioPatio[p] = []);
+  data.filas.forEach(f => {
+    if (!inventarioPatio[f.patio]) inventarioPatio[f.patio] = [];
+    inventarioPatio[f.patio].push({
+      material: f.material,
+      balas: parseFloat(f.balas) || 0,
+      suelto: parseFloat(f.suelto) || 0,
+      reembalar: parseFloat(f.reembalar) || 0,
+      obs: f.observaciones || ''
+    });
+  });
+
+  // Cargar materiales recientes por patio
+  recientesPorPatio = data.recientes || {};
+
+  // Añadir materiales recientes que no estén ya en el inventario actual
+  PATIOS.forEach(p => {
+    const yaEstan = new Set((inventarioPatio[p] || []).map(r => r.material));
+    const recientes = recientesPorPatio[p] || [];
+    recientes.forEach(mat => {
+      if (!yaEstan.has(mat)) {
+        inventarioPatio[p].push({ material: mat, balas: 0, suelto: 0, reembalar: 0, obs: '' });
+      }
+    });
+  });
+
+  renderTabla();
+  toast(`Inventario de ${MESES_NOMBRES[mes]} ${anyo} cargado`, 'success');
+}
+
+// ═══════════════════════════════════════════════════════
+// RENDER TABLA
+// ═══════════════════════════════════════════════════════
+function renderTabla() {
+  const patio = PATIOS[patioActivo];
+  const filas = inventarioPatio[patio] || [];
+  const tbody = document.getElementById('tabla-body');
+  const tfoot = document.getElementById('tabla-foot');
+
+  if (filas.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="4" class="vacio">Sin materiales. Selecciona mes/año o añade un material.</td></tr>';
+    tfoot.style.display = 'none';
+    return;
+  }
+
+  let totBalas = 0, totPend = 0;
+  tbody.innerHTML = filas.map((f, i) => {
+    const pendiente = (f.suelto || 0) + (f.reembalar || 0);
+    totBalas += f.balas || 0;
+    totPend  += pendiente;
+    const sel = filaEditandoIdx === i ? 'seleccionada' : '';
+    return `<tr class="${sel}" onclick="seleccionarFila(${i})">
+      <td>${f.material}</td>
+      <td class="num">${fmtTn(f.balas)}</td>
+      <td class="num">${fmtTn(pendiente)}</td>
+      <td style="font-size:0.8rem;color:var(--texto-suave)">${f.obs || ''}</td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('tot-balas').textContent = fmtTn(totBalas);
+  document.getElementById('tot-pend').textContent  = fmtTn(totPend);
+  tfoot.style.display = '';
+}
+
+function fmtTn(v) {
+  if (!v) return '—';
+  return v.toLocaleString('es-ES', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
+}
+
+// ═══════════════════════════════════════════════════════
+// SELECCIONAR FILA → cargar en tarjeta
+// ═══════════════════════════════════════════════════════
+function seleccionarFila(idx) {
+  if (mesBloqueado) return;
+  const patio = PATIOS[patioActivo];
+  const f = inventarioPatio[patio][idx];
+  filaEditandoIdx = idx;
+
+  document.getElementById('card-material').value  = f.material;
+  document.getElementById('card-balas').value     = f.balas || '';
+  document.getElementById('card-suelto').value    = f.suelto || '';
+  document.getElementById('card-reembalar').value = f.reembalar || '';
+  document.getElementById('card-obs').value       = f.obs || '';
+
+  renderTabla();
+}
+
+// ═══════════════════════════════════════════════════════
+// REGISTRAR MATERIAL
+// ═══════════════════════════════════════════════════════
+function registrarMaterial() {
+  if (mesBloqueado) { toast('Mes bloqueado', 'error'); return; }
+  const material  = document.getElementById('card-material').value;
+  const balas     = parseFloat(document.getElementById('card-balas').value) || 0;
+  const suelto    = parseFloat(document.getElementById('card-suelto').value) || 0;
+  const reembalar = parseFloat(document.getElementById('card-reembalar').value) || 0;
+  const obs       = document.getElementById('card-obs').value.trim();
+
+  if (!material) { toast('Selecciona un material', 'error'); return; }
+
+  const patio = PATIOS[patioActivo];
+  if (!inventarioPatio[patio]) inventarioPatio[patio] = [];
+  const lista = inventarioPatio[patio];
+
+  if (filaEditandoIdx !== null) {
+    // Editar fila existente — SUMAR cantidades, concatenar obs
+    const f = lista[filaEditandoIdx];
+    f.balas     = (f.balas || 0) + balas;
+    f.suelto    = (f.suelto || 0) + suelto;
+    f.reembalar = (f.reembalar || 0) + reembalar;
+    f.obs = f.obs ? (obs ? f.obs + '; ' + obs : f.obs) : obs;
+    filaEditandoIdx = null;
+  } else {
+    // Buscar si ya existe ese material en el patio
+    const existeIdx = lista.findIndex(r => r.material === material);
+    if (existeIdx >= 0) {
+      const f = lista[existeIdx];
+      f.balas     = (f.balas || 0) + balas;
+      f.suelto    = (f.suelto || 0) + suelto;
+      f.reembalar = (f.reembalar || 0) + reembalar;
+      f.obs = f.obs ? (obs ? f.obs + '; ' + obs : f.obs) : obs;
+    } else {
+      lista.push({ material, balas, suelto, reembalar, obs });
+    }
+  }
+
+  renderTabla();
+  limpiarCard();
+  toast('Material registrado', 'success');
+}
+
+function limpiarCard() {
+  document.getElementById('card-material').value  = '';
+  document.getElementById('card-balas').value     = '';
+  document.getElementById('card-suelto').value    = '';
+  document.getElementById('card-reembalar').value = '';
+  document.getElementById('card-obs').value       = '';
+  filaEditandoIdx = null;
+  renderTabla();
+}
+
+// ═══════════════════════════════════════════════════════
+// GUARDAR PATIO EN GOOGLE SHEETS
+// ═══════════════════════════════════════════════════════
+async function guardarPatio() {
+  if (!mesSeleccionado || !anyoSeleccionado) { toast('Selecciona mes y año primero', 'error'); return; }
+  if (mesBloqueado) { toast('Mes bloqueado', 'error'); return; }
+
+  const patio = PATIOS[patioActivo];
+  const materiales = (inventarioPatio[patio] || []).map(f => ({
+    material: f.material,
+    balas:     f.balas,
+    suelto:    f.suelto,
+    reembalar: f.reembalar,
+    observaciones: f.obs
+  }));
+
+  mostrarLoading('Guardando inventario del patio...');
+  const data = await apiPost({
+    accion: 'saveInventario',
+    mes: mesSeleccionado,
+    anyo: anyoSeleccionado,
+    patio,
+    materiales
+  });
+  ocultarLoading();
+
+  if (data && data.ok) {
+    toast(`${patio} guardado correctamente (${data.guardadas} materiales)`, 'success');
+  } else {
+    toast((data && data.error) || 'Error al guardar', 'error');
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+// BLOQUEAR MES
+// ═══════════════════════════════════════════════════════
+async function bloquearMes() {
+  if (!mesSeleccionado || !anyoSeleccionado) { toast('Selecciona mes y año primero', 'error'); return; }
+  if (mesBloqueado) { toast('El mes ya está bloqueado', 'error'); return; }
+  if (!confirm(`¿Seguro que quieres inmobilizar ${MESES_NOMBRES[mesSeleccionado]} ${anyoSeleccionado}?\nNo se podrán hacer más cambios en este mes.`)) return;
+
+  mostrarLoading('Bloqueando mes...');
+  const data = await apiPost({ accion: 'bloquearMes', mes: mesSeleccionado, anyo: anyoSeleccionado });
+  ocultarLoading();
+
+  if (data && data.ok) {
+    mesBloqueado = true;
+    document.getElementById('alerta-bloq').style.display = 'block';
+    document.getElementById('btn-guardar').disabled = true;
+    toast(`${MESES_NOMBRES[mesSeleccionado]} ${anyoSeleccionado} bloqueado`, 'success');
+  } else {
+    toast((data && data.error) || 'Error al bloquear', 'error');
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+// HISTÓRICO
+// ═══════════════════════════════════════════════════════
+async function cargarHistorico() {
+  const lista = document.getElementById('lista-meses');
+  lista.innerHTML = '<div class="mes-item text-muted" style="cursor:default">Cargando...</div>';
+  const data = await apiGet({ accion: 'getHistorico' });
+  if (!data || !data.ok) { lista.innerHTML = '<div class="mes-item text-muted">Error al cargar</div>'; return; }
+
+  if (data.historico.length === 0) {
+    lista.innerHTML = '<div class="mes-item text-muted" style="cursor:default">No hay meses registrados</div>';
+    return;
+  }
+  lista.innerHTML = data.historico.map(h => `
+    <div class="mes-item" onclick="verMesHistorico(${h.mes}, ${h.anyo}, this)">
+      <span class="mes-nombre">${MESES_NOMBRES[h.mes]} ${h.anyo}</span>
+      <span class="badge-${h.bloqueado ? 'bloq' : 'open'}">${h.bloqueado ? 'Bloqueado' : 'Abierto'}</span>
+    </div>
+  `).join('');
+}
+
+async function verMesHistorico(mes, anyo, el) {
+  document.querySelectorAll('.mes-item').forEach(e => e.classList.remove('active'));
+  el.classList.add('active');
+
+  mostrarLoading('Cargando...');
+  const data = await apiGet({ accion: 'getInventario', mes, anyo });
+  ocultarLoading();
+
+  if (!data || !data.ok) { toast('Error al cargar', 'error'); return; }
+
+  const det = document.getElementById('historico-detalle');
+  det.innerHTML = `<h3>Inventario — ${MESES_NOMBRES[mes]} ${anyo}</h3>`;
+
+  PATIOS.forEach(patio => {
+    const filas = data.filas.filter(f => f.patio === patio);
+    if (filas.length === 0) return;
+
+    let totB = 0, totP = 0;
+    const rowsHTML = filas.map(f => {
+      const pend = (parseFloat(f.suelto)||0) + (parseFloat(f.reembalar)||0);
+      totB += parseFloat(f.balas)||0;
+      totP += pend;
+      return `<tr>
+        <td>${f.material}</td>
+        <td class="num">${fmtTn(parseFloat(f.balas)||0)}</td>
+        <td class="num">${fmtTn(pend)}</td>
+        <td style="font-size:0.8rem;color:var(--texto-suave)">${f.observaciones||''}</td>
+      </tr>`;
+    }).join('');
+
+    det.innerHTML += `
+      <div style="margin-bottom:20px">
+        <div style="font-weight:700;color:var(--azul-oscuro);font-size:0.9rem;margin-bottom:8px;padding:6px 10px;background:var(--verde-claro);border-radius:6px;">
+          ${patio}
+        </div>
+        <table class="tabla-inv">
+          <thead><tr>
+            <th style="width:40%">Material</th>
+            <th style="width:15%">Balas acabadas</th>
+            <th style="width:15%">Pendiente embalar</th>
+            <th>Observaciones</th>
+          </tr></thead>
+          <tbody>${rowsHTML}</tbody>
+          <tfoot><tr>
+            <td>TOTAL</td>
+            <td class="num">${fmtTn(totB)}</td>
+            <td class="num">${fmtTn(totP)}</td>
+            <td></td>
+          </tr></tfoot>
+        </table>
+      </div>`;
+  });
+
+  // Botón exportar desde histórico
+  det.innerHTML += `<div style="margin-top:16px;text-align:right">
+    <button class="btn btn-excel btn-sm" onclick="exportarExcelMes(${mes},${anyo})">
+      Exportar ${MESES_NOMBRES[mes]} ${anyo} a Excel
+    </button>
+  </div>`;
+}
+
+// ═══════════════════════════════════════════════════════
+// EXPORTAR EXCEL
+// ═══════════════════════════════════════════════════════
+function exportarExcel() {
+  if (!mesSeleccionado || !anyoSeleccionado) { toast('Selecciona mes y año primero', 'error'); return; }
+  exportarExcelMes(mesSeleccionado, anyoSeleccionado, inventarioPatio);
+}
+
+async function exportarExcelMes(mes, anyo, datosLocales) {
+  let datos = datosLocales;
+  if (!datos) {
+    mostrarLoading('Cargando datos para exportar...');
+    const resp = await apiGet({ accion: 'getInventario', mes, anyo });
+    ocultarLoading();
+    if (!resp || !resp.ok) { toast('Error al cargar datos', 'error'); return; }
+    datos = {};
+    PATIOS.forEach(p => datos[p] = []);
+    resp.filas.forEach(f => {
+      if (datos[f.patio]) datos[f.patio].push({ material: f.material, balas: parseFloat(f.balas)||0, suelto: parseFloat(f.suelto)||0, reembalar: parseFloat(f.reembalar)||0, obs: f.observaciones });
+    });
+  }
+
+  const wb = XLSX.utils.book_new();
+
+  // Hoja resumen global
+  const resumenRows = [['Mercancía', 'Balas acabadas', 'Material por procesar', 'Patio']];
+  const totalesMat = {};
+
+  PATIOS.forEach(patio => {
+    (datos[patio] || []).forEach(f => {
+      const pend = (f.suelto || 0) + (f.reembalar || 0);
+      if (!totalesMat[f.material]) totalesMat[f.material] = { balas: 0, pend: 0 };
+      totalesMat[f.material].balas += f.balas || 0;
+      totalesMat[f.material].pend  += pend;
+      resumenRows.push([f.material, f.balas || 0, pend, patio]);
+    });
+  });
+
+  const wsResumen = XLSX.utils.aoa_to_sheet(resumenRows);
+  wsResumen['!cols'] = [{ wch: 36 }, { wch: 18 }, { wch: 22 }, { wch: 18 }];
+  XLSX.utils.book_append_sheet(wb, wsResumen, 'Resumen');
+
+  // Hoja consolidada (como imagen 2)
+  const consolRows = [['Mercancía', 'Balas acabadas', 'Material por procesar']];
+  let tB = 0, tP = 0;
+  Object.entries(totalesMat).sort((a,b) => a[0].localeCompare(b[0])).forEach(([mat, v]) => {
+    consolRows.push([mat, v.balas || null, v.pend || null]);
+    tB += v.balas; tP += v.pend;
+  });
+  consolRows.push(['TOTAL', tB, tP]);
+  const wsConsol = XLSX.utils.aoa_to_sheet(consolRows);
+  wsConsol['!cols'] = [{ wch: 36 }, { wch: 18 }, { wch: 22 }];
+  XLSX.utils.book_append_sheet(wb, wsConsol, 'Consolidado');
+
+  // Una hoja por patio
+  PATIOS.forEach(patio => {
+    const rows = [['Material', 'Balas acabadas', 'Suelto', 'Mat. reembalar', 'Pendiente embalar', 'Observaciones']];
+    let tBa = 0, tSu = 0, tRe = 0, tPe = 0;
+    (datos[patio] || []).filter(f => f.balas || f.suelto || f.reembalar).forEach(f => {
+      const pend = (f.suelto||0) + (f.reembalar||0);
+      rows.push([f.material, f.balas||0, f.suelto||0, f.reembalar||0, pend, f.obs||'']);
+      tBa += f.balas||0; tSu += f.suelto||0; tRe += f.reembalar||0; tPe += pend;
+    });
+    rows.push(['TOTAL', tBa, tSu, tRe, tPe, '']);
+    const ws = XLSX.utils.aoa_to_sheet(rows);
+    ws['!cols'] = [{wch:36},{wch:16},{wch:12},{wch:16},{wch:18},{wch:30}];
+    XLSX.utils.book_append_sheet(wb, ws, patio.substring(0, 31));
+  });
+
+  XLSX.writeFile(wb, `COMREC_Inventario_${MESES_NOMBRES[mes]}_${anyo}.xlsx`);
+  toast('Excel exportado correctamente', 'success');
+}
+
+// ═══════════════════════════════════════════════════════
+// CONFIGURACIÓN
+// ═══════════════════════════════════════════════════════
+function abrirConfig() {
+  document.getElementById('inp-api-url').value = API_URL;
+  document.getElementById('modal-config').style.display = 'flex';
+}
+function cerrarConfig() {
+  document.getElementById('modal-config').style.display = 'none';
+}
+function guardarConfig() {
+  const url = document.getElementById('inp-api-url').value.trim();
+  if (!url) { toast('Introduce una URL válida', 'error'); return; }
+  API_URL = url;
+  localStorage.setItem('comrec_api_url', url);
+  cerrarConfig();
+  toast('URL guardada correctamente', 'success');
+  cargarMateriales();
+}
+
+// ═══════════════════════════════════════════════════════
+// UI HELPERS
+// ═══════════════════════════════════════════════════════
+let toastTimer;
+function toast(msg, tipo = '', duracion = 3500) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'show' + (tipo ? ' ' + tipo : '');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { el.className = ''; }, duracion);
+}
+
+function mostrarLoading(msg = 'Cargando...') {
+  document.getElementById('loading-msg').textContent = msg;
+  document.getElementById('loading').style.display = 'flex';
+}
+function ocultarLoading() {
+  document.getElementById('loading').style.display = 'none';
+}
+
+// ═══════════════════════════════════════════════════════
+// GESTIÓN DE MATERIALES
+// ═══════════════════════════════════════════════════════
+let materialesCompletos = []; // { nombre, activo }
+
+async function cargarSeccionMateriales() {
+  const contenedor = document.getElementById('mat-lista');
+  contenedor.innerHTML = '<div class="text-muted" style="padding:20px;text-align:center;">Cargando...</div>';
+
+  const data = await apiGet({ accion: 'getMaterialesCompleto' });
+  if (!data || !data.ok) {
+    contenedor.innerHTML = '<div class="text-muted" style="padding:20px;text-align:center;">Error al cargar materiales</div>';
+    return;
+  }
+  materialesCompletos = data.materiales; // [{nombre, activo}]
+  renderListaMateriales();
+}
+
+function renderListaMateriales(filtro = '') {
+  const contenedor = document.getElementById('mat-lista');
+  const fil = filtro.trim().toLowerCase();
+  const lista = materialesCompletos.filter(m => !fil || m.nombre.toLowerCase().includes(fil));
+
+  document.getElementById('mat-contador').textContent = `${materialesCompletos.filter(m=>m.activo).length} activos / ${materialesCompletos.length} total`;
+
+  if (lista.length === 0) {
+    contenedor.innerHTML = '<div class="text-muted" style="padding:20px;text-align:center;">No hay resultados</div>';
+    return;
+  }
+
+  contenedor.innerHTML = lista.map((m, i) => {
+    const idx = materialesCompletos.indexOf(m);
+    return `<div class="mat-item">
+      <span class="mat-nombre ${m.activo ? '' : 'inactivo'}">${m.nombre}</span>
+      <button class="mat-toggle ${m.activo ? 'activo' : 'inactivo'}" onclick="toggleMaterial(${idx})">
+        ${m.activo ? 'Desactivar' : 'Activar'}
+      </button>
+    </div>`;
+  }).join('');
+}
+
+function filtrarMateriales() {
+  const filtro = document.getElementById('mat-buscar').value;
+  renderListaMateriales(filtro);
+}
+
+async function altaMaterial() {
+  const inp = document.getElementById('mat-nuevo-nombre');
+  const aviso = document.getElementById('mat-nuevo-aviso');
+  const nombre = inp.value.trim().toUpperCase();
+
+  if (!nombre) { toast('Introduce el nombre del material', 'error'); return; }
+
+  // Comprobar duplicado
+  const existe = materialesCompletos.some(m => m.nombre === nombre);
+  aviso.style.display = existe ? 'block' : 'none';
+  if (existe) return;
+
+  mostrarLoading('Guardando material...');
+  const data = await apiPost({ accion: 'altaMaterial', nombre });
+  ocultarLoading();
+
+  if (data && data.ok) {
+    materialesCompletos.push({ nombre, activo: true });
+    materialesCompletos.sort((a, b) => a.nombre.localeCompare(b.nombre));
+    inp.value = '';
+    renderListaMateriales(document.getElementById('mat-buscar').value);
+    // Recargar el select de la sección registro
+    poblarSelectMaterial(materialesCompletos.filter(m => m.activo).map(m => m.nombre));
+    materialesMaestros = materialesCompletos.filter(m => m.activo).map(m => m.nombre);
+    toast(`Material "${nombre}" dado de alta`, 'success');
+  } else {
+    toast((data && data.error) || 'Error al dar de alta', 'error');
+  }
+}
+
+async function toggleMaterial(idx) {
+  const mat = materialesCompletos[idx];
+  const nuevoEstado = !mat.activo;
+
+  mostrarLoading(nuevoEstado ? 'Activando...' : 'Desactivando...');
+  const data = await apiPost({ accion: 'toggleMaterial', nombre: mat.nombre, activo: nuevoEstado });
+  ocultarLoading();
+
+  if (data && data.ok) {
+    mat.activo = nuevoEstado;
+    renderListaMateriales(document.getElementById('mat-buscar').value);
+    poblarSelectMaterial(materialesCompletos.filter(m => m.activo).map(m => m.nombre));
+    materialesMaestros = materialesCompletos.filter(m => m.activo).map(m => m.nombre);
+    toast(`Material "${mat.nombre}" ${nuevoEstado ? 'activado' : 'desactivado'}`, 'success');
+  } else {
+    toast((data && data.error) || 'Error', 'error');
+  }
+}
+</script>
+</body>
+</html>
