@@ -695,7 +695,7 @@ body { font-family: var(--font-main); background: #dce8ee; color: var(--texto); 
 // ═══════════════════════════════════════════════════════
 // CONFIGURACIÓN
 // ═══════════════════════════════════════════════════════
-let API_URL = 'https://script.google.com/macros/s/AKfycbwlb_V3o7KpQqSWXjunha7XuwogijKSg79OpwCv7ExJt9NDRXXtzcegZ9Mo_2B-MZCXeA/exec';
+let API_URL = 'https://script.google.com/macros/s/AKfycbwCg00dEugCaortEC8o2z9iiimQL78l4_eG8E04A6KRYCujlxdttrKP4kpVB2N73jM/exec';
 
 const PATIOS = ['Patio 1y2', 'Patio 3', 'Patio 6', 'Patio Central', 'Gruscal y Campa'];
 const MESES_NOMBRES = ['', 'Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
@@ -771,11 +771,26 @@ async function apiGet(params) {
 
 async function apiPost(body) {
   if (!API_URL) { toast('Configura la URL del Apps Script primero', 'error'); return null; }
-  const r = await fetch(API_URL, {
-    method: 'POST',
-    body: JSON.stringify(body),
-    headers: { 'Content-Type': 'application/json' }
-  });
+  // Usamos GET para evitar problemas CORS con Apps Script
+  const accion = body.accion;
+  let params = { accion };
+
+  if (accion === 'saveInventario') {
+    // Serializar el payload completo en un param "data"
+    const { accion: _, ...rest } = body;
+    params.data = encodeURIComponent(JSON.stringify(rest));
+  } else if (accion === 'bloquearMes') {
+    params.mes  = body.mes;
+    params.anyo = body.anyo;
+  } else if (accion === 'altaMaterial') {
+    params.nombre = encodeURIComponent(body.nombre);
+  } else if (accion === 'toggleMaterial') {
+    params.nombre = encodeURIComponent(body.nombre);
+    params.activo = body.activo;
+  }
+
+  const qs = Object.entries(params).map(([k,v]) => `${k}=${v}`).join('&');
+  const r = await fetch(`${API_URL}?${qs}`);
   return r.json();
 }
 
