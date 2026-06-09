@@ -697,8 +697,6 @@ body { font-family: var(--font-main); background: #dce8ee; color: var(--texto); 
 // ═══════════════════════════════════════════════════════
 let API_URL = 'https://script.google.com/macros/s/AKfycbx2cBAEARLnp_y1oz-iK9luZa14JwguePcbB_w83-fxBGKYV5KqtE12TF9RzznbWqwsUg/exec';
 
-
-
 const PATIOS = ['Patio 1y2', 'Patio 3', 'Patio 6', 'Patio Central', 'Gruscal y Campa'];
 const MESES_NOMBRES = ['', 'Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 
@@ -768,7 +766,7 @@ async function apiFetch(params) {
   if (!API_URL) { toast('Configura la URL del Apps Script primero', 'error'); return null; }
   const qs = new URLSearchParams(params).toString();
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 30000);
+  const timer = setTimeout(() => controller.abort(), 10000);
   try {
     const r = await fetch(`${API_URL}?${qs}`, { redirect: 'follow', signal: controller.signal });
     clearTimeout(timer);
@@ -776,7 +774,7 @@ async function apiFetch(params) {
     return JSON.parse(text);
   } catch (err) {
     clearTimeout(timer);
-    if (err.name === 'AbortError') throw new Error('Tiempo de espera agotado. Comprueba la URL del Apps Script.');
+    if (err.name === 'AbortError') throw new Error('Sin respuesta del servidor (10s). Verifica que el despliegue de Apps Script es correcto.');
     throw err;
   }
 }
@@ -888,23 +886,29 @@ async function onCambioMes() {
   mesSeleccionado = mes;
   anyoSeleccionado = anyo;
 
-  // Inicializar inventario vacío para todos los patios
   PATIOS.forEach(p => { if (!inventarioPatio[p]) inventarioPatio[p] = []; });
 
   mostrarLoading('Cargando inventario...');
-  const data = await apiGet({ accion: 'getInventario', mes, anyo });
+  let data, bData;
+  try {
+    [data, bData] = await Promise.all([
+      apiGet({ accion: 'getInventario', mes, anyo }),
+      apiGet({ accion: 'getBloqueados' })
+    ]);
+  } catch(err) {
+    ocultarLoading();
+    toast('Error de conexion: ' + err.message, 'error');
+    return;
+  }
   ocultarLoading();
 
-  if (!data || !data.ok) { toast('Error al cargar inventario', 'error'); return; }
+  if (!data || !data.ok) { toast('Error al cargar inventario: ' + (data && data.error || 'sin respuesta'), 'error'); return; }
 
-  // Verificar si está bloqueado
-  const bData = await apiGet({ accion: 'getBloqueados' });
   mesBloqueado = bData && bData.ok &&
     bData.bloqueados.some(b => parseInt(b.mes) === mes && parseInt(b.anyo) === anyo);
   document.getElementById('alerta-bloq').style.display = mesBloqueado ? 'block' : 'none';
   document.getElementById('btn-guardar').disabled = mesBloqueado;
 
-  // Cargar datos existentes
   PATIOS.forEach(p => inventarioPatio[p] = []);
   data.filas.forEach(f => {
     if (!inventarioPatio[f.patio]) inventarioPatio[f.patio] = [];
@@ -917,10 +921,8 @@ async function onCambioMes() {
     });
   });
 
-  // Cargar materiales recientes por patio
   recientesPorPatio = data.recientes || {};
 
-  // Añadir materiales recientes que no estén ya en el inventario actual
   PATIOS.forEach(p => {
     const yaEstan = new Set((inventarioPatio[p] || []).map(r => r.material));
     const recientes = recientesPorPatio[p] || [];
@@ -1230,7 +1232,7 @@ async function exportarExcelMes(mes, anyo, datosLocales) {
 
   const wsResumen = XLSX.utils.aoa_to_sheet(resumenRows);
   wsResumen['!cols'] = [{ wch: 36 }, { wch: 18 }, { wch: 22 }, { wch: 18 }];
-  XLSX.utils.book_append_sheet(wb, wsResumen, 'Resumen');
+  XLSX.utils.book_append_sheet(wb, wsResumen, 'Registros');
 
   // Hoja consolidada (como imagen 2)
   const consolRows = [['Mercancía', 'Balas acabadas', 'Material por procesar']];
@@ -1242,7 +1244,7 @@ async function exportarExcelMes(mes, anyo, datosLocales) {
   consolRows.push(['TOTAL', tB, tP]);
   const wsConsol = XLSX.utils.aoa_to_sheet(consolRows);
   wsConsol['!cols'] = [{ wch: 36 }, { wch: 18 }, { wch: 22 }];
-  XLSX.utils.book_append_sheet(wb, wsConsol, 'Consolidado');
+  XLSX.utils.book_append_sheet(wb, wsConsol, 'Resumen');
 
   // Una hoja por patio
   PATIOS.forEach(patio => {
