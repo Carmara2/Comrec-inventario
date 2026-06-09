@@ -695,7 +695,7 @@ body { font-family: var(--font-main); background: #dce8ee; color: var(--texto); 
 // ═══════════════════════════════════════════════════════
 // CONFIGURACIÓN
 // ═══════════════════════════════════════════════════════
-let API_URL = 'https://script.google.com/macros/s/AKfycbwCg00dEugCaortEC8o2z9iiimQL78l4_eG8E04A6KRYCujlxdttrKP4kpVB2N73jM/exec';
+let API_URL = 'https://script.google.com/macros/s/AKfycbz3mJmzBnuBBwbyHjy__bUOZLQTi-mTRsk7wHnliUYc6m6Ka6O3RkY-jgxkdm2n9CkKag/exec';
 
 const PATIOS = ['Patio 1y2', 'Patio 3', 'Patio 6', 'Patio Central', 'Gruscal y Campa'];
 const MESES_NOMBRES = ['', 'Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
@@ -762,24 +762,87 @@ function cambiarPatio(idx) {
 // ═══════════════════════════════════════════════════════
 // API CALLS
 // ═══════════════════════════════════════════════════════
-async function apiGet(params) {
+async function apiFetch(params) {
   if (!API_URL) { toast('Configura la URL del Apps Script primero', 'error'); return null; }
   const qs = new URLSearchParams(params).toString();
-  const r = await fetch(`${API_URL}?${qs}`);
-  return r.json();
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 30000);
+  try {
+    const r = await fetch(`${API_URL}?${qs}`, { redirect: 'follow', signal: controller.signal });
+    clearTimeout(timer);
+    const text = await r.text();
+    return JSON.parse(text);
+  } catch (err) {
+    clearTimeout(timer);
+    if (err.name === 'AbortError') throw new Error('Tiempo de espera agotado. Comprueba la URL del Apps Script.');
+    throw err;
+  }
+}
+
+async function apiGet(params) {
+  return apiFetch(params);
 }
 
 async function apiPost(body) {
   if (!API_URL) { toast('Configura la URL del Apps Script primero', 'error'); return null; }
-  // Usamos GET para evitar problemas CORS con Apps Script
   const accion = body.accion;
-  let params = { accion };
 
+  // saveInventario usa iframe POST con campos separados
   if (accion === 'saveInventario') {
-    // Serializar el payload completo en un param "data"
-    const { accion: _, ...rest } = body;
-    params.data = encodeURIComponent(JSON.stringify(rest));
-  } else if (accion === 'bloquearMes') {
+    return new Promise((resolve) => {
+      const iframeName = 'gs_iframe_' + Date.now();
+      const iframe = document.createElement('iframe');
+      iframe.name = iframeName;
+      iframe.style.display = 'none';
+      document.body.appendChild(iframe);
+
+      const form = document.createElement('form');
+      form.method = 'POST';
+      form.action = API_URL;
+      form.target = iframeName;
+      form.style.display = 'none';
+
+      // Campos individuales que Apps Script lee en e.parameter
+      const campos = {
+        accion:     'saveInventario',
+        mes:        body.mes,
+        anyo:       body.anyo,
+        patio:      body.patio,
+        materiales: JSON.stringify(body.materiales || [])
+      };
+      Object.entries(campos).forEach(([k, v]) => {
+        const inp = document.createElement('input');
+        inp.type = 'hidden';
+        inp.name = k;
+        inp.value = v;
+        form.appendChild(inp);
+      });
+
+      document.body.appendChild(form);
+
+      const timer = setTimeout(() => {
+        cleanup();
+        resolve({ ok: false, error: 'Tiempo de espera agotado' });
+      }, 20000);
+
+      function cleanup() {
+        clearTimeout(timer);
+        try { document.body.removeChild(iframe); } catch(e){}
+        try { document.body.removeChild(form); } catch(e){}
+      }
+
+      iframe.onload = () => {
+        cleanup();
+        resolve({ ok: true, guardadas: (body.materiales || []).filter(m => m.balas || m.suelto || m.reembalar || m.observaciones).length });
+      };
+
+      form.submit();
+    });
+  }
+
+  // Resto de acciones por GET
+  let params = { accion };
+  if (accion === 'bloquearMes') {
     params.mes  = body.mes;
     params.anyo = body.anyo;
   } else if (accion === 'altaMaterial') {
@@ -788,10 +851,7 @@ async function apiPost(body) {
     params.nombre = encodeURIComponent(body.nombre);
     params.activo = body.activo;
   }
-
-  const qs = Object.entries(params).map(([k,v]) => `${k}=${v}`).join('&');
-  const r = await fetch(`${API_URL}?${qs}`);
-  return r.json();
+  return apiFetch(params);
 }
 
 // ═══════════════════════════════════════════════════════
@@ -1001,13 +1061,20 @@ async function guardarPatio() {
   }));
 
   mostrarLoading('Guardando inventario del patio...');
-  const data = await apiPost({
-    accion: 'saveInventario',
-    mes: mesSeleccionado,
-    anyo: anyoSeleccionado,
-    patio,
-    materiales
-  });
+  let data;
+  try {
+    data = await apiPost({
+      accion: 'saveInventario',
+      mes: mesSeleccionado,
+      anyo: anyoSeleccionado,
+      patio,
+      materiales
+    });
+  } catch(err) {
+    ocultarLoading();
+    toast('Error: ' + err.message, 'error');
+    return;
+  }
   ocultarLoading();
 
   if (data && data.ok) {
