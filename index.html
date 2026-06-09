@@ -695,7 +695,7 @@ body { font-family: var(--font-main); background: #dce8ee; color: var(--texto); 
 // ═══════════════════════════════════════════════════════
 // CONFIGURACIÓN
 // ═══════════════════════════════════════════════════════
-let API_URL = 'https://script.google.com/macros/s/AKfycbx2cBAEARLnp_y1oz-iK9luZa14JwguePcbB_w83-fxBGKYV5KqtE12TF9RzznbWqwsUg/exec';
+let API_URL = 'https://script.google.com/macros/s/AKfycbxK-dt-ckb4efgxOjb9oH6cFXN3bgVnumwosufavab9bpAympK0MNziZFwGOFujXc-whA/exec';
 
 const PATIOS = ['Patio 1y2', 'Patio 3', 'Patio 6', 'Patio Central', 'Gruscal y Campa'];
 const MESES_NOMBRES = ['', 'Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
@@ -930,6 +930,14 @@ async function onCambioMes() {
       if (!yaEstan.has(mat)) {
         inventarioPatio[p].push({ material: mat, balas: 0, suelto: 0, reembalar: 0, obs: '' });
       }
+    });
+    // Ordenar: primero los que tienen toneladas, luego los que tienen 0, ambos grupos alfabéticamente
+    inventarioPatio[p].sort((a, b) => {
+      const aTiene = (a.balas || 0) + (a.suelto || 0) + (a.reembalar || 0) > 0;
+      const bTiene = (b.balas || 0) + (b.suelto || 0) + (b.reembalar || 0) > 0;
+      if (aTiene && !bTiene) return -1;
+      if (!aTiene && bTiene) return 1;
+      return a.material.localeCompare(b.material);
     });
   });
 
