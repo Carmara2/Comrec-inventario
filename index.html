@@ -238,13 +238,16 @@ body { font-family: var(--font-main); background: #dce8ee; color: var(--texto); 
   letter-spacing: 0.7px; color: var(--texto-suave); margin-bottom: 12px;
 }
 .card-fields {
-  display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end;
+  display: grid;
+  grid-template-columns: 1.8fr 1.2fr 1.2fr 1.2fr 1.8fr;
+  gap: 12px;
+  align-items: start;
 }
 .card-fields .field { display: flex; flex-direction: column; gap: 4px; }
-.card-fields .field.material-sel { flex: 2; min-width: 200px; }
-.card-fields .field.peso-field { flex: 1; min-width: 110px; }
-.card-fields .field.obs-field { flex: 2; min-width: 180px; }
-.card-fields label { font-size: 0.73rem; font-weight: 600; color: var(--texto-suave); text-transform: uppercase; letter-spacing: 0.4px; }
+.card-fields .field.material-sel { }
+.card-fields .field.peso-field { }
+.card-fields .field.obs-field { }
+.card-fields label { font-size: 0.73rem; font-weight: 600; color: var(--texto-suave); text-transform: uppercase; letter-spacing: 0.4px; display: flex; align-items: flex-end; min-height: 32px; line-height: 1.2; margin-bottom: 4px; }
 .card-fields select,
 .card-fields input[type=text],
 .card-fields input[type=number] {
@@ -271,6 +274,17 @@ body { font-family: var(--font-main); background: #dce8ee; color: var(--texto); 
 }
 .card-fields select:focus,
 .card-fields input:focus { outline: none; border-color: var(--azul-claro); }
+.card-fields input.campo-ok { border-color: #27ae60; background: #f0faf4; }
+.card-fields input.campo-err { border-color: var(--rojo); background: #fdf0f0; }
+.peso-result {
+  font-size: 0.72rem;
+  min-height: 16px;
+  margin-top: 3px;
+  font-variant-numeric: tabular-nums;
+  color: #1a6e3a;
+  font-weight: 600;
+}
+.peso-result.err { color: var(--rojo); }
 .card-actions { margin-top: 12px; display: flex; gap: 8px; }
 
 /* ── Tabla inferior ────────────────────────────────── */
@@ -545,15 +559,18 @@ body { font-family: var(--font-main); background: #dce8ee; color: var(--texto); 
           </div>
           <div class="field peso-field">
             <label>Balas acabadas (Tn)</label>
-            <input id="card-balas" type="number" step="0.001" min="0" placeholder="0,000">
+            <input id="card-balas" type="text" placeholder="ej: 7*1500 + 2*3000" oninput="evalPesoField('card-balas','res-balas')">
+            <div class="peso-result" id="res-balas"></div>
           </div>
           <div class="field peso-field">
             <label>Suelto (Tn)</label>
-            <input id="card-suelto" type="number" step="0.001" min="0" placeholder="0,000">
+            <input id="card-suelto" type="text" placeholder="ej: 24000 + 6*600" oninput="evalPesoField('card-suelto','res-suelto')">
+            <div class="peso-result" id="res-suelto"></div>
           </div>
           <div class="field peso-field">
             <label>Mat. reembalar (Tn)</label>
-            <input id="card-reembalar" type="number" step="0.001" min="0" placeholder="0,000">
+            <input id="card-reembalar" type="text" placeholder="ej: 3*2000" oninput="evalPesoField('card-reembalar','res-reembalar')">
+            <div class="peso-result" id="res-reembalar"></div>
           </div>
           <div class="field obs-field">
             <label>Observaciones</label>
@@ -1005,12 +1022,74 @@ function seleccionarFila(idx) {
 // ═══════════════════════════════════════════════════════
 // REGISTRAR MATERIAL
 // ═══════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════
+// CALCULADORA DE EXPRESIONES EN CAMPOS DE PESO
+// ═══════════════════════════════════════════════════════
+function safeEvalExpr(expr) {
+  if (!expr || !expr.toString().trim()) return null;
+  const clean = expr.toString().replace(/,/g, '.').replace(/[^0-9+\-*/().\s]/g, '');
+  if (!clean.trim()) return null;
+  try {
+    const val = Function('"use strict"; return (' + clean + ')')();
+    if (typeof val !== 'number' || !isFinite(val) || val < 0) return null;
+    return val;
+  } catch { return null; }
+}
+
+function evalPesoField(inputId, resultId) {
+  const inp = document.getElementById(inputId);
+  const res = document.getElementById(resultId);
+  const raw = inp.value.trim();
+
+  if (!raw) {
+    inp.className = inp.className.replace(/campo-ok|campo-err/g, '').trim();
+    res.textContent = '';
+    res.className = 'peso-result';
+    return;
+  }
+
+  // Si es numero simple, no mostrar nada extra
+  const isSimple = /^[0-9]+([.,][0-9]+)?$/.test(raw);
+  const val = safeEvalExpr(raw);
+
+  if (val === null) {
+    inp.classList.add('campo-err'); inp.classList.remove('campo-ok');
+    res.textContent = 'Expresion no valida';
+    res.className = 'peso-result err';
+  } else {
+    inp.classList.add('campo-ok'); inp.classList.remove('campo-err');
+    if (isSimple) {
+      res.textContent = '';
+      res.className = 'peso-result';
+    } else {
+      // Mostrar resultado en kg y Tn
+      const kg = Math.round(val);
+      const tn = (val / 1000).toLocaleString('es-ES', {minimumFractionDigits:3, maximumFractionDigits:3});
+      res.textContent = kg.toLocaleString('es-ES') + ' kg = ' + tn + ' Tn';
+      res.className = 'peso-result';
+    }
+  }
+}
+
+function getPesoValue(inputId) {
+  const raw = document.getElementById(inputId).value.trim();
+  if (!raw) return 0;
+  // Si la expresion ya fue evaluada y es un numero simple en Tn
+  const simple = parseFloat(raw.replace(',', '.'));
+  if (!isNaN(simple) && raw.replace(/[0-9.,]/g,'') === '') return simple;
+  // Si es una expresion en kg, evaluar y convertir a Tn
+  const val = safeEvalExpr(raw);
+  if (val === null) return 0;
+  // Heuristica: si el valor es mayor que 1000, asumimos que esta en kg
+  return val > 500 ? val / 1000 : val;
+}
+
 function registrarMaterial() {
   if (mesBloqueado) { toast('Mes bloqueado', 'error'); return; }
   const material  = document.getElementById('card-material').value;
-  const balas     = parseFloat(document.getElementById('card-balas').value) || 0;
-  const suelto    = parseFloat(document.getElementById('card-suelto').value) || 0;
-  const reembalar = parseFloat(document.getElementById('card-reembalar').value) || 0;
+  const balas     = getPesoValue('card-balas');
+  const suelto    = getPesoValue('card-suelto');
+  const reembalar = getPesoValue('card-reembalar');
   const obs       = document.getElementById('card-obs').value.trim();
 
   if (!material) { toast('Selecciona un material', 'error'); return; }
@@ -1052,6 +1131,14 @@ function limpiarCard() {
   document.getElementById('card-suelto').value    = '';
   document.getElementById('card-reembalar').value = '';
   document.getElementById('card-obs').value       = '';
+  ['card-balas','card-suelto','card-reembalar'].forEach(id => {
+    const el = document.getElementById(id);
+    el.classList.remove('campo-ok','campo-err');
+  });
+  ['res-balas','res-suelto','res-reembalar'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) { el.textContent = ''; el.className = 'peso-result'; }
+  });
   filaEditandoIdx = null;
   renderTabla();
 }
@@ -1410,3 +1497,4 @@ async function toggleMaterial(idx) {
 </script>
 </body>
 </html>
+
