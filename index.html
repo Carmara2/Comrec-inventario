@@ -309,6 +309,12 @@ body { font-family: var(--font-main); background: #dce8ee; color: var(--texto); 
   overflow: hidden;
   font-size: 0.83rem;
 }
+.tabla-inv tbody td, .tabla-inv tfoot td {
+  border-right: 1px solid var(--borde);
+}
+.tabla-inv tbody td:last-child, .tabla-inv tfoot td:last-child {
+  border-right: none;
+}
 .tabla-inv thead th {
   background: var(--azul-medio);
   color: #fff;
@@ -327,7 +333,10 @@ body { font-family: var(--font-main); background: #dce8ee; color: var(--texto); 
 }
 .tabla-inv tbody tr:hover { background: #e8f4ff; }
 .tabla-inv tbody tr.seleccionada { background: #d0eaff; font-weight: 600; }
-.tabla-inv tbody td { padding: 9px 12px; color: var(--texto); }
+.tabla-inv tbody td { padding: 9px 12px; color: var(--texto); border-right: 1px solid var(--borde); }
+.tabla-inv tbody td:last-child { border-right: none; }
+.tabla-inv thead th { border-right: 1px solid rgba(255,255,255,0.2); }
+.tabla-inv thead th:last-child { border-right: none; }
 .tabla-inv tbody td.num { text-align: right; font-variant-numeric: tabular-nums; }
 .tabla-inv .vacio { color: var(--texto-suave); font-style: italic; text-align: center; padding: 20px; }
 .tabla-inv tfoot td {
@@ -558,17 +567,17 @@ body { font-family: var(--font-main); background: #dce8ee; color: var(--texto); 
             </select>
           </div>
           <div class="field peso-field">
-            <label>Balas acabadas (Tn)</label>
+            <label>Balas acabadas</label>
             <input id="card-balas" type="text" placeholder="ej: 7*1500 + 2*3000" oninput="evalPesoField('card-balas','res-balas')">
             <div class="peso-result" id="res-balas"></div>
           </div>
           <div class="field peso-field">
-            <label>Suelto (Tn)</label>
+            <label>Suelto</label>
             <input id="card-suelto" type="text" placeholder="ej: 24000 + 6*600" oninput="evalPesoField('card-suelto','res-suelto')">
             <div class="peso-result" id="res-suelto"></div>
           </div>
           <div class="field peso-field">
-            <label>Mat. reembalar (Tn)</label>
+            <label>Mat. reembalar</label>
             <input id="card-reembalar" type="text" placeholder="ej: 3*2000" oninput="evalPesoField('card-reembalar','res-reembalar')">
             <div class="peso-result" id="res-reembalar"></div>
           </div>
@@ -592,10 +601,11 @@ body { font-family: var(--font-main); background: #dce8ee; color: var(--texto); 
         <table class="tabla-inv" id="tabla-materiales">
           <thead>
             <tr>
-              <th style="width:40%">Material</th>
-              <th style="width:15%">Balas acabadas</th>
-              <th style="width:15%">Pendiente embalar</th>
-              <th>Observaciones</th>
+              <th style="width:38%">Material</th>
+              <th style="width:14%;text-align:right">Balas acabadas</th>
+              <th style="width:14%;text-align:right">Pendiente embalar</th>
+              <th style="width:26%">Observaciones</th>
+              <th style="width:4%"></th>
             </tr>
           </thead>
           <tbody id="tabla-body">
@@ -604,8 +614,9 @@ body { font-family: var(--font-main); background: #dce8ee; color: var(--texto); 
           <tfoot id="tabla-foot" style="display:none">
             <tr>
               <td>TOTAL</td>
-              <td class="num" id="tot-balas">—</td>
-              <td class="num" id="tot-pend">—</td>
+              <td class="num" style="text-align:right" id="tot-balas">—</td>
+              <td class="num" style="text-align:right" id="tot-pend">—</td>
+              <td></td>
               <td></td>
             </tr>
           </tfoot>
@@ -773,6 +784,8 @@ function cambiarPatio(idx) {
   document.querySelectorAll('.tab-btn').forEach((b, i) => b.classList.toggle('active', i === idx));
   limpiarCard();
   filaEditandoIdx = null;
+  const btn = document.querySelector('.card-actions .btn-primary');
+  if (btn) { btn.removeAttribute('data-modo'); btn.innerHTML = '<svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Registrar material'; }
   renderTabla();
 }
 
@@ -985,9 +998,12 @@ function renderTabla() {
     const sel = filaEditandoIdx === i ? 'seleccionada' : '';
     return `<tr class="${sel}" onclick="seleccionarFila(${i})">
       <td>${f.material}</td>
-      <td class="num">${fmtTn(f.balas)}</td>
-      <td class="num">${fmtTn(pendiente)}</td>
+      <td class="num" style="text-align:right">${fmtTn(f.balas)}</td>
+      <td class="num" style="text-align:right">${fmtTn(pendiente)}</td>
       <td style="font-size:0.8rem;color:var(--texto-suave)">${f.obs || ''}</td>
+      <td style="text-align:center;padding:6px 8px">
+        <button onclick="event.stopPropagation();editarFila(${i})" title="Editar" style="background:none;border:none;cursor:pointer;color:var(--azul-claro);font-size:1rem;padding:0;line-height:1;" aria-label="Editar fila">✏️</button>
+      </td>
     </tr>`;
   }).join('');
 
@@ -1008,14 +1024,40 @@ function seleccionarFila(idx) {
   if (mesBloqueado) return;
   const patio = PATIOS[patioActivo];
   const f = inventarioPatio[patio][idx];
+  // Click en fila = AÑADIR (sumar) al material existente
   filaEditandoIdx = idx;
-
   document.getElementById('card-material').value  = f.material;
-  document.getElementById('card-balas').value     = f.balas || '';
-  document.getElementById('card-suelto').value    = f.suelto || '';
-  document.getElementById('card-reembalar').value = f.reembalar || '';
-  document.getElementById('card-obs').value       = f.obs || '';
+  document.getElementById('card-balas').value     = '';
+  document.getElementById('card-suelto').value    = '';
+  document.getElementById('card-reembalar').value = '';
+  document.getElementById('card-obs').value       = '';
+  ['res-balas','res-suelto','res-reembalar'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) { el.textContent = ''; el.className = 'peso-result'; }
+  });
+  renderTabla();
+}
 
+function editarFila(idx) {
+  if (mesBloqueado) return;
+  const patio = PATIOS[patioActivo];
+  const f = inventarioPatio[patio][idx];
+  // Lapiz = EDITAR (sobreescribir) el valor actual
+  filaEditandoIdx = idx;
+  // Marcar como modo edicion
+  document.getElementById('card-material').value  = f.material;
+  document.getElementById('card-balas').value     = f.balas ? (f.balas * 1000).toFixed(0) : '';
+  document.getElementById('card-suelto').value    = f.suelto ? (f.suelto * 1000).toFixed(0) : '';
+  document.getElementById('card-reembalar').value = f.reembalar ? (f.reembalar * 1000).toFixed(0) : '';
+  document.getElementById('card-obs').value       = f.obs || '';
+  // Evaluar campos para mostrar resultado
+  ['balas','suelto','reembalar'].forEach(k => {
+    evalPesoField('card-' + k, 'res-' + k);
+  });
+  // Cambiar boton a modo sobreescritura
+  const btn = document.querySelector('.card-actions .btn-primary');
+  btn.setAttribute('data-modo', 'editar');
+  btn.innerHTML = '<svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg> Guardar edicion';
   renderTabla();
 }
 
@@ -1098,13 +1140,26 @@ function registrarMaterial() {
   if (!inventarioPatio[patio]) inventarioPatio[patio] = [];
   const lista = inventarioPatio[patio];
 
+  const modoEditar = document.querySelector('.card-actions .btn-primary')?.getAttribute('data-modo') === 'editar';
+
   if (filaEditandoIdx !== null) {
-    // Editar fila existente — SUMAR cantidades, concatenar obs
     const f = lista[filaEditandoIdx];
-    f.balas     = (f.balas || 0) + balas;
-    f.suelto    = (f.suelto || 0) + suelto;
-    f.reembalar = (f.reembalar || 0) + reembalar;
-    f.obs = f.obs ? (obs ? f.obs + '; ' + obs : f.obs) : obs;
+    if (modoEditar) {
+      // Lapiz: sobreescribir valores
+      f.balas     = balas;
+      f.suelto    = suelto;
+      f.reembalar = reembalar;
+      f.obs       = obs;
+    } else {
+      // Click en fila: SUMAR cantidades, concatenar obs
+      f.balas     = (f.balas || 0) + balas;
+      f.suelto    = (f.suelto || 0) + suelto;
+      f.reembalar = (f.reembalar || 0) + reembalar;
+      f.obs = f.obs ? (obs ? f.obs + '; ' + obs : f.obs) : obs;
+    }
+    // Resetear boton
+    const btn = document.querySelector('.card-actions .btn-primary');
+    if (btn) { btn.removeAttribute('data-modo'); btn.innerHTML = '<svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Registrar material'; }
     filaEditandoIdx = null;
   } else {
     // Buscar si ya existe ese material en el patio
@@ -1497,4 +1552,3 @@ async function toggleMaterial(idx) {
 </script>
 </body>
 </html>
-
