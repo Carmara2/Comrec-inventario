@@ -602,8 +602,8 @@ body { font-family: var(--font-main); background: #dce8ee; color: var(--texto); 
           <thead>
             <tr>
               <th style="width:38%">Material</th>
-              <th style="width:14%;text-align:right">Balas acabadas</th>
-              <th style="width:14%;text-align:right">Pendiente embalar</th>
+              <th style="width:14%;text-align:right">Balas acabadas (kg)</th>
+              <th style="width:14%;text-align:right">Pendiente embalar (kg)</th>
               <th style="width:26%">Observaciones</th>
               <th style="width:4%"></th>
             </tr>
@@ -998,8 +998,8 @@ function renderTabla() {
     const sel = filaEditandoIdx === i ? 'seleccionada' : '';
     return `<tr class="${sel}" onclick="seleccionarFila(${i})">
       <td>${f.material}</td>
-      <td class="num" style="text-align:right">${fmtTn(f.balas)}</td>
-      <td class="num" style="text-align:right">${fmtTn(pendiente)}</td>
+      <td class="num" style="text-align:right">${fmtKg(f.balas)}</td>
+      <td class="num" style="text-align:right">${fmtKg(pendiente)}</td>
       <td style="font-size:0.8rem;color:var(--texto-suave)">${f.obs || ''}</td>
       <td style="text-align:center;padding:6px 8px">
         <button onclick="event.stopPropagation();editarFila(${i})" title="Editar" style="background:none;border:none;cursor:pointer;color:var(--azul-claro);font-size:1rem;padding:0;line-height:1;" aria-label="Editar fila">✏️</button>
@@ -1007,14 +1007,19 @@ function renderTabla() {
     </tr>`;
   }).join('');
 
-  document.getElementById('tot-balas').textContent = fmtTn(totBalas);
-  document.getElementById('tot-pend').textContent  = fmtTn(totPend);
+  document.getElementById('tot-balas').textContent = fmtKg(totBalas);
+  document.getElementById('tot-pend').textContent  = fmtKg(totPend);
   tfoot.style.display = '';
 }
 
-function fmtTn(v) {
+function fmtKg(v) {
   if (!v) return '—';
-  return v.toLocaleString('es-ES', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
+  // Si tiene decimales significativos (datos antiguos en Tn), mostrarlos
+  const hasDecimals = Math.abs(v - Math.round(v)) > 0.001;
+  return v.toLocaleString('es-ES', { 
+    minimumFractionDigits: hasDecimals ? 3 : 0, 
+    maximumFractionDigits: hasDecimals ? 3 : 0 
+  }) + ' kg';
 }
 
 // ═══════════════════════════════════════════════════════
@@ -1046,9 +1051,9 @@ function editarFila(idx) {
   filaEditandoIdx = idx;
   // Marcar como modo edicion
   document.getElementById('card-material').value  = f.material;
-  document.getElementById('card-balas').value     = f.balas ? (f.balas * 1000).toFixed(0) : '';
-  document.getElementById('card-suelto').value    = f.suelto ? (f.suelto * 1000).toFixed(0) : '';
-  document.getElementById('card-reembalar').value = f.reembalar ? (f.reembalar * 1000).toFixed(0) : '';
+  document.getElementById('card-balas').value     = f.balas || '';
+  document.getElementById('card-suelto').value    = f.suelto || '';
+  document.getElementById('card-reembalar').value = f.reembalar || '';
   document.getElementById('card-obs').value       = f.obs || '';
   // Evaluar campos para mostrar resultado
   ['balas','suelto','reembalar'].forEach(k => {
@@ -1106,8 +1111,7 @@ function evalPesoField(inputId, resultId) {
     } else {
       // Mostrar resultado en kg y Tn
       const kg = Math.round(val);
-      const tn = (val / 1000).toLocaleString('es-ES', {minimumFractionDigits:3, maximumFractionDigits:3});
-      res.textContent = kg.toLocaleString('es-ES') + ' kg = ' + tn + ' Tn';
+      res.textContent = '= ' + kg.toLocaleString('es-ES') + ' kg';
       res.className = 'peso-result';
     }
   }
@@ -1116,14 +1120,8 @@ function evalPesoField(inputId, resultId) {
 function getPesoValue(inputId) {
   const raw = document.getElementById(inputId).value.trim();
   if (!raw) return 0;
-  // Si la expresion ya fue evaluada y es un numero simple en Tn
-  const simple = parseFloat(raw.replace(',', '.'));
-  if (!isNaN(simple) && raw.replace(/[0-9.,]/g,'') === '') return simple;
-  // Si es una expresion en kg, evaluar y convertir a Tn
   const val = safeEvalExpr(raw);
-  if (val === null) return 0;
-  // Heuristica: si el valor es mayor que 1000, asumimos que esta en kg
-  return val > 500 ? val / 1000 : val;
+  return val !== null ? val : 0;
 }
 
 function registrarMaterial() {
@@ -1305,8 +1303,8 @@ async function verMesHistorico(mes, anyo, el) {
       totP += pend;
       return `<tr>
         <td>${f.material}</td>
-        <td class="num">${fmtTn(parseFloat(f.balas)||0)}</td>
-        <td class="num">${fmtTn(pend)}</td>
+        <td class="num">${fmtKg(parseFloat(f.balas)||0)}</td>
+        <td class="num">${fmtKg(pend)}</td>
         <td style="font-size:0.8rem;color:var(--texto-suave)">${f.observaciones||''}</td>
       </tr>`;
     }).join('');
@@ -1326,8 +1324,8 @@ async function verMesHistorico(mes, anyo, el) {
           <tbody>${rowsHTML}</tbody>
           <tfoot><tr>
             <td>TOTAL</td>
-            <td class="num">${fmtTn(totB)}</td>
-            <td class="num">${fmtTn(totP)}</td>
+            <td class="num">${fmtKg(totB)}</td>
+            <td class="num">${fmtKg(totP)}</td>
             <td></td>
           </tr></tfoot>
         </table>
